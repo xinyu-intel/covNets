@@ -1,0 +1,521 @@
+---
+title: "Build covNets from Scratch"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Here, we will briefly introduce convolutional neural-network (CNN). CNNs were first made popular in 1998 by LeCun's seminal paper. Since then, they have proven to be the best method we have for recognising patterns in images, sounds, videos, and even text!
+
+Image recognition was initially a manual process; researchers would have to specify which bits (features) of an image were useful to identify. For example, if we wanted to classify an image into ‘cat’ or ‘basketball’ we could have created code that extracts colours (basketballs are orange) and shapes (cats have triangular ears). Perhaps with a count of these features we could then run a linear regression to get the relationship between number of triangles and whether the image is a cat or a tree. This approach suffers from issues of image scale, angle, quality and light. Scale Invariant Feature Transformation (SIFT) largely improved upon this and was used to provide a `feature description' of an object, which could then be fed into a linear regression (or any other relationship learner). However, this approach had set-in-stone rules that could not be optimally altered for a specific domain.
+
+CNNs look at images (extract features) in an interesting way. To start, they look only at very small parts of an image (at a time), perhaps through a restricted window of 5 by 5 pixels (a filter). 2D convolutions are used for images, and these slide the window across until the whole image has been covered. This stage would typically extract colours and edges. However, the next layer of the network would look at a combination of the previous filters and thus 'zoom-out'. After a certain number of layers the network would be 'zoomed-out' enough to recognise shapes and larger structures.
+
+In this post, we will first examine the forward-propagation in a convolutional neural-network (CNN) by using one image in order to describe what a convolution actually does. Then, we will build a 3-layer covNets in R language.
+
+**Loading data**
+
+```{r}
+library(png)
+library(grid)
+
+img <- readPNG("cat.png")
+dim(img)  # 250 by 250 x 4(R,G,B,transparency), because it's a PNG not a JPEG
+```
+
+```{r}
+# Scale image to 0 and 1 to plot
+standardise <- function(x){(x-min(x))/(max(x)-min(x))}
+
+# Plot matrix as image
+imgshow <- function(x){grid.raster(standardise(x))}
+```
+
+```{r}
+# Let's take the red-colour channel and pretend we have a grey image
+# Blue and green would also work ...
+r_img <- matrix(img[,,1], nrow=250)
+print(dim(r_img))  # 250 by 250
+
+# We see a cat
+imgshow(r_img)
+```
+
+**Convolutions from Scratch**
+
+```{r}
+# Lets take a tiny bit from the top left-corner
+# 3 by 3 pixels
+r_img_3_3 <- r_img[248:250, 248:250]
+print(r_img_3_3)
+```
+
+```{r}
+# Consider the following matrix
+# Let's call it a "filter"
+# The dimensions of the filter we can call "kernel size"
+conv_emboss <- matrix(c(2,0,0,0,-1,0,0,0,-1), nrow = 3)
+print(conv_emboss)
+
+# What would happen if we multiplied our tiny chunk with the above matrix?
+print(r_img_3_3 * conv_emboss)
+# If we take the sum we get a number
+print(sum(r_img_3_3 * conv_emboss))
+```
+
+This number seems a bit meaningless, so let's perform the same operation, and then repeat for the next column, and repeat. Once we have reached the end, we move onto the next row, and repeat ...
+
+We capture our results in another matrix and then display it as an image.
+
+Note: If we have a 250 by 250 image and we apply these 3 by 3 filters moving along 1 row/column at a time, we will end up with a matrix that is 250-3+1 by 250-3+1. If this is not trivial try an example on a 5 by 5 matrix. For now we ignore padding
+
+```{r}
+convolution <- function(input_img, filter, show=TRUE, out=FALSE)
+{
+  kernel_size <- dim(filter)
+  conv_out <- outer(
+    1:(nrow(input_img)-kernel_size[[1]]+1),
+    1:(ncol(input_img)-kernel_size[[2]]+1),
+    Vectorize(function(r,c) sum(input_img[r:(r+kernel_size[[1]]-1),
+                                          c:(c+kernel_size[[2]]-1)]*filter))
+  )    
+  if (show){imgshow(conv_out)}
+  if (out){conv_out}
+}
+```
+
+```{r}
+# Now we apply the previous filters across the whole image (3 by 3) at a time
+convolution(input_img = r_img, filter = conv_emboss)
+```
+
+```{r}
+# Let's try some different filters
+conv_sharpen <- matrix(c(0,-1,0,-1,5,-1,0,-1,0), nrow = 3)
+convolution(input_img = r_img, filter = conv_sharpen)
+```
+
+```{r}
+conv_laplace <- matrix(c(.5,1,.5,1,-6,1,.5,1,.5), nrow = 3)
+convolution(input_img = r_img, filter = conv_laplace)
+```
+
+```{r}
+conv_sobel <- matrix(c(1,2,1,0,0,0,-1,-2,-1), nrow=3)
+convolution(input_img = r_img, filter = conv_sobel)
+```
+
+**Feature Map**
+
+So what happens during the training phase of the convolutional layers is that we start with a random-filter like the below and feed-forward the predictions. The filter then gets incrementally updated until it extracts something useful (for the classification) from the image (such as edges, gradients, etc).
+
+Typically we want to create many filters (e.g. 64) to generate as many features as possible. The below example shows what the result of the first layer may look like:
+
+```{r}
+filter_map <- lapply(X=c(1:64), FUN=function(x){
+    # Random matrix of 0, 1, -1
+    conv_rand <- matrix(sample.int(3, size=9, replace = TRUE), ncol=3)-2
+    convolution(input_img = r_img, filter = conv_rand, show=FALSE, out=TRUE)
+})
+```
+
+```{r}
+square_stack_lst_of_matricies <- function(lst)
+{
+    sqr_size <- sqrt(length(lst))
+    # Stack vertically
+    cols <- do.call(cbind, lst)
+    # Split to another dim
+    dim(cols) <- c(dim(filter_map[[1]])[[1]],
+                   dim(filter_map[[1]])[[1]]*sqr_size,
+                   sqr_size)
+    # Stack horizontally
+    do.call(rbind, lapply(1:dim(cols)[3], function(i) cols[, , i])) 
+}
+```
+
+```{r}
+imgshow(square_stack_lst_of_matricies(filter_map))
+```
+
+**RGB**
+
+Typically with colour images the same convolution is applied across all three colour channels.
+
+```{r}
+# Apply same convolution to all three colour channels
+convolu_rgb <- function(img, flt)
+{
+    r_out <- convolution(matrix(img[,,1], nrow=250), flt, show=FALSE, out=TRUE)
+    g_out <- convolution(matrix(img[,,2], nrow=250), flt, show=FALSE, out=TRUE)
+    b_out <- convolution(matrix(img[,,3], nrow=250), flt, show=FALSE, out=TRUE)    
+    # Create colour matrix
+    col <- rgb(standardise(r_out), standardise(g_out), standardise(b_out))  
+    dim(col) <- dim(r_out)
+    # Show
+    grid.raster(col)
+}
+```
+
+```{r}
+# Let's apply an identity matrix to see what happens
+convolu_rgb(img, diag(3))
+```
+
+**ReLU and Pooling**
+
+Typically we see several operations combined together with a convolution:
+
+1. ReLU(z) = `max(0,z)`
+
+```{r}
+relu <- function(z){z*(z>0)}
+```
+
+2. Max Pool
+
+```{r}
+# Assuming symmetric kernel and stride (along x, y-axis)
+# out_size = ((in_size-kernel_size+2*pad)/stride) +1
+maxpool <- function(input_img, ksize, stride, show=TRUE, out=FALSE)
+{
+  conv_out <- outer(
+    1:(((nrow(input_img)-ksize)/stride)+1),
+    1:(((ncol(input_img)-ksize)/stride)+1),
+    Vectorize(function(r,c) max(input_img[
+        ((r*stride)-(stride-1)):(((r*stride)-(stride))+ksize),
+        ((c*stride)-(stride-1)):(((c*stride)-(stride))+ksize)]))
+  )    
+  if (show){imgshow(conv_out)}
+  if (out){conv_out}
+}
+```
+
+```{r}
+# Example
+# 1. Apply a (3,3) convolution
+# 2. Apply ReLU activation
+# 3. Apply (2,2) max-pooling
+conv_block <- lapply(c(1:3), function(i){
+    conv <- relu(convolution(matrix(img[,,i], nrow=dim(img)[[1]]),
+                             conv_sharpen, show=FALSE, out=TRUE))
+    maxpool(conv, 2, 2, FALSE, TRUE)})
+
+conv_block_pic <-  rgb(standardise(conv_block[[1]]), 
+                       standardise(conv_block[[2]]),
+                       standardise(conv_block[[3]]))
+dim(conv_block_pic) <- dim(conv_block[[1]])
+grid.raster(conv_block_pic)
+```
+
+Then, we will build a 3-layer covNets in R language. A three-layer convolutional network with the following architecture:
+
+    conv - relu - 2x2 max pool - affine - softmax
+
+The network operates on samples of data that have shape (N, C, H, W) consisting of N images, each with height H and width W and with C input channels.
+
+```{r}
+# Prediction
+predict.cnn <- function(model, data = X.test) {
+  
+  conv.layer_test <- array(0, c(dim(data)[1],26,26))
+  pooling.layer_test <- array(0, c(dim(data)[1],13,13))
+  shaping_test <- matrix(0,dim(data)[1],13*13)
+  
+  # Feed Forwad
+  for (i in 1:dim(data)[1]) {
+    conv.layer_test[i,,] <- convolution(input_img = data[i,,], W = model$W1, b = model$b1)
+    # neurons : Rectified Linear
+    conv.layer_test[i,,] <- relu(conv.layer_test[i,,])
+    # pooling layer
+    pooling.layer_test[i,,] <- avgpool(conv.layer_test[i,,], 2, 2)
+    shaping_test[i,] <- matrix(pooling.layer_test[i,,], nrow = 1)
+  }
+     # affine layer
+     score <- sweep(shaping %*% model$W2, 2, model$b2, '+')
+  
+     # Loss Function: softmax
+     score.exp <- exp(score)
+     probs <-sweep(score.exp, 1, rowSums(score.exp), '/') 
+  
+     # select max possiblity
+     labels.predicted <- max.col(probs)
+     return(labels.predicted)
+}
+```
+
+```{r}
+rotate <- function(x) t(apply(x, 2, rev))
+```
+
+```{r}
+  convolution <- function(input_img, W, b, show=FALSE, out=TRUE)
+{
+  kernel_size <- dim(W)[1]
+  conv_out <- outer(
+    1:(nrow(input_img)-kernel_size+1),
+    1:(ncol(input_img)-kernel_size+1),
+    Vectorize(function(r,c) sum(input_img[r:(r+kernel_size-1),
+                                          c:(c+kernel_size-1)]*W)+b)
+  )    
+  if (show){imgshow(conv_out)}
+  if (out){conv_out}
+  }
+  
+  avgpool <- function(input_img, ksize, stride, show=FALSE, out=TRUE)
+{
+  conv_out <- outer(
+    1:(((nrow(input_img)-ksize)/stride)+1),
+    1:(((ncol(input_img)-ksize)/stride)+1),
+    Vectorize(function(r,c) mean(input_img[
+        ((r*stride)-(stride-1)):(((r*stride)-(stride))+ksize),
+        ((c*stride)-(stride-1)):(((c*stride)-(stride))+ksize)]))
+  )    
+  if (show){imgshow(conv_out)}
+  if (out){conv_out}
+  }
+  
+  relu <- function(z){z*(z>0)}
+```
+
+
+```{r}
+# Train: build and train a 2-layers neural network 
+train.dnn <- function(X_train=X_train, X_test=NULL, 
+                      Y_train=Y_train, Y_test=NULL,
+                      model = NULL,
+                      # set conv layer
+                      filter_size = 3,
+                      # set pooling layer
+                      pooling_size = 2,
+                      # set affine layers and neurons
+                      # currently, only support 1 affine layer
+                      affine=c(6), 
+                      # max iteration steps
+                      maxit=2000,
+                      # delta loss 
+                      abstol=1e-2,
+                      # learning rate
+                      lr = 1e-2,
+                      # regularization rate
+                      reg = 1e-3,
+                      # show results every 'display' step
+                      display = 100,
+                      random.seed = 1)
+{
+  # to make the case reproducible.
+  set.seed(random.seed)
+  
+  # total number of training set
+  N <- dim(X_train)[1]
+  
+  # extract the data and label
+  # don't need atribute 
+  X <- X_train
+  # correct categories represented by integer 
+  Y <- Y_train
+  if(is.factor(Y)) { Y <- as.integer(Y) }
+  # create index for both row and col
+  # create index for both row and col
+  Y.len <- length(unique(Y))
+  Y.set <- sort(unique(Y))
+  Y.index <- cbind(1:N, match(Y, Y.set))
+  
+  # create model or get model from parameter
+  if(is.null(model)) {
+    # size of filter
+    F <- filter_size
+    # size of conv_layer
+    conv_layer_size <- dim(X)[2]-F+1
+    # size of pooling layer
+    pooling_layer_size <- conv_layer_size/2
+    # number of categories for classification
+    K <- length(unique(Y))
+    H <- affine
+    
+    # create and init weights and bias 
+    W1 <- matrix(rnorm(F*F), nrow=F)/sqrt(F*F)
+    b1 <- rnorm(1)
+    
+    W2 <- matrix(rnorm(pooling_layer_size*pooling_layer_size*K),
+                 nrow=pooling_layer_size*pooling_layer_size,
+                 ncol=K)/sqrt(pooling_layer_size*pooling_layer_size*K)
+    b2 <- matrix(0, nrow=1, ncol=K)
+  } else {
+    D  <- model$D
+    F  <- model$filter_size
+    K  <- model$K
+    H  <- model$H
+    W1 <- model$W1
+    b1 <- model$b1
+    W1 <- model$W2
+    b2 <- model$b2
+  }
+  
+  # use all train data to update weights since it's a small dataset
+  batchsize <- N
+  # init loss to a very big value
+  loss <- 100000
+  
+  
+  conv.layer <- array(0,c(N,conv_layer_size,conv_layer_size))
+  pooling.layer <- array(0,c(N,pooling_layer_size,pooling_layer_size))
+  shaping <- matrix(0,N,pooling_layer_size*pooling_layer_size)
+  score <- matrix(0, N, Y.len)
+  score.exp <- matrix(0, N, Y.len)
+  probs <- matrix(0, N, Y.len)
+  
+  # Training the network
+  i <- 0
+  while(i < maxit && loss > abstol ) {
+    
+    # iteration index
+    i <- i +1
+    
+    # forward ....
+    # 1 indicate row, 2 indicate col
+    corect.logprobs <- 0
+    for (i in 1:N) {
+       # forward ....
+       # 1 indicate row, 2 indicate col
+       conv.layer[i,,] <- convolution(X_train[i,,], W = W1, b = b1)
+       # neurons : ReLU
+       conv.layer[i,,] <- relu(conv.layer[i,,])
+       # pooling layer
+       pooling.layer[i,,] <- avgpool(conv.layer[i,,], 2, 2)
+       shaping[i,] <- matrix(pooling.layer[i,,], nrow = 1)
+    }
+   # affine layer
+   score <- sweep(shaping %*% W2, 2, b2, '+')
+   # softmax
+   score.exp <- exp(score)
+   # debug
+   probs <- score.exp/rowSums(score.exp)
+   # compute the loss
+   corect.logprobs <- -log(probs[Y.index])
+   
+   data.loss <- sum(corect.logprobs)/batchsize
+   reg.loss <- 0.5*reg* (sum(W1*W1) + sum(W2*W2))
+   loss <- data.loss + reg.loss
+    
+    # display results and update model
+    if( i %% display == 0) {
+      if(!is.null(X_test)) {
+        model <- list( D = D,
+                       H = H,
+                       F = F,
+                       K = K,
+                       # weights and bias
+                       W1 = W1, 
+                       b1 = b1, 
+                       W2 = W2, 
+                       b2 = b2)
+        labs <- predict.cnn(model, X_test)
+        accuracy <- mean(as.integer(Y_test) == Y.set[labs])
+        cat(i, loss, accuracy, "\n")
+      } else {
+        cat(i, loss, "\n")
+      }
+    }
+    
+    # backward ....
+    dscores <- probs
+    dscores[Y.index] <- dscores[Y.index] -1
+    dscores <- dscores / batchsize
+    
+    dW2 <- t(shaping) %*% dscores 
+    db2 <- colSums(dscores)
+    
+    upsample <- array(0,c(N,conv_layer_size,conv_layer_size))
+    for (k in 1:N) {
+      for (i in 1:pooling_layer_size) {
+        for (j in 1:pooling_layer_size) {
+              upsample[k,2*i-1,2*j-1] <- pooling.layer[k,i,j]
+              upsample[k,2*i-1,2*j] <- pooling.layer[k,i,j]
+              upsample[k,2*i,2*j-1] <- pooling.layer[k,i,j]
+              upsample[k,2*i,2*j] <- pooling.layer[k,i,j]
+        }
+      }
+    }
+    upsample <- upsample/(pooling_size*pooling_size)
+    upsample[upsample <= 0] <- 0
+    dconv <- upsample
+    
+    dconv_sum <- matrix(0,conv_layer_size,conv_layer_size)
+    for (i in 1:N) {
+      dconv_sum <- dconv[i,,] + dconv_sum
+    }
+    
+    dW1 <- matrix(0,filter_size,filter_size)
+    
+    for (i in 1:N) {
+      dW1 <- dW1 + convolution(rotate(rotate(X_train[i,,])), W = dconv_sum, b = 0)
+    }
+    
+    db1 <- sum(dconv_sum)
+    
+    # update ....
+    dW2 <- dW2 + reg*W2
+    dW1 <- dW1 + reg*W1
+    
+    W1 <- W1 - lr * dW1
+    b1 <- b1 - lr * db1
+    
+    W2 <- W2 - lr * dW2
+    b2 <- b2 - lr * db2
+    
+  }
+  
+  # final results
+  # creat list to store learned parameters
+  # you can add more parameters for debug and visualization
+  # such as residuals, fitted.values ...
+  model <- list( D = D,
+                 H = H,
+                 K = K,
+                 F = F,
+                 # weights and bias
+                 W1= W1, 
+                 b1= b1, 
+                 W2= W2, 
+                 b2= b2)
+  
+  return(model)
+}
+```
+
+```{r}
+########################################################################
+# testing
+#######################################################################
+set.seed(1)
+
+Y_train[Y_train==0]<-10
+Y_test[Y_test==0]<-10
+
+# 1. split data into test/train
+samp_train <- sample(1:60000,300)
+samp_test <- sample(1:10000,50)
+
+# 2. train model
+mnist.model <- train.dnn(X_train = X_train[samp_train,,], 
+                      X_test = X_test[samp_test,,], 
+                      Y_train = Y_train[samp_train],
+                      Y_test = Y_test[samp_test],
+                      maxit=2000, display=50)
+
+# 3. prediction
+# NOTE: if the predict is factor, we need to transfer the number into class manually.
+#       To make the code clear, I don't write this change into predict.dnn function.
+labels.cnn <- predict.cnn(mnist.model, data = X_test)
+
+# 4. verify the results
+table(Y_test, labels.dnn)
+
+#accuracy
+mean(as.integer(Y_test) == labels.dnn)
+```
+
+
