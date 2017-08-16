@@ -212,7 +212,7 @@ grid.raster(conv_block_pic)
 
 Then, we will build a 3-layer covNets in R language. A three-layer convolutional network with the following architecture:
 
-    conv - relu - 2x2 max pool - affine - softmax
+    conv - relu - 2x2 mean pool - affine - softmax
 
 The network operates on samples of data that have shape (N, C, H, W) consisting of N images, each with height H and width W and with C input channels.
 
