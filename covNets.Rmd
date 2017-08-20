@@ -210,7 +210,8 @@ dim(conv_block_pic) <- dim(conv_block[[1]])
 grid.raster(conv_block_pic)
 ```
 
-Then, we will build a 3-layer covNets in R language. A three-layer convolutional network with the following architecture:
+Then, we will build a 3-layer covNets in R language. A three-layer convolutional network with the 
+following architecture:
 
     conv - relu - 2x2 mean pool - affine - softmax
 
@@ -230,7 +231,7 @@ predict.cnn <- function(model, data = X.test) {
     # neurons : Rectified Linear
     conv.layer_test[i,,] <- relu(conv.layer_test[i,,])
     # pooling layer
-    pooling.layer_test[i,,] <- avgpool(conv.layer_test[i,,], 2, 2)
+    pooling.layer_test[i,,] <- meanpool(conv.layer_test[i,,], 2, 2)
     shaping_test[i,] <- matrix(pooling.layer_test[i,,], nrow = 1)
   }
      # affine layer
@@ -264,7 +265,7 @@ rotate <- function(x) t(apply(x, 2, rev))
   if (out){conv_out}
   }
   
-  avgpool <- function(input_img, ksize, stride, show=FALSE, out=TRUE)
+  meanpool <- function(input_img, ksize, stride, show=FALSE, out=TRUE)
 {
   conv_out <- outer(
     1:(((nrow(input_img)-ksize)/stride)+1),
@@ -384,7 +385,7 @@ train.dnn <- function(X_train=X_train, X_test=NULL,
        # neurons : ReLU
        conv.layer[i,,] <- relu(conv.layer[i,,])
        # pooling layer
-       pooling.layer[i,,] <- avgpool(conv.layer[i,,], 2, 2)
+       pooling.layer[i,,] <- meanpool(conv.layer[i,,], 2, 2)
        shaping[i,] <- matrix(pooling.layer[i,,], nrow = 1)
     }
    # affine layer
