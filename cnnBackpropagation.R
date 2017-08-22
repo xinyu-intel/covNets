@@ -1,4 +1,8 @@
-cnnBackpropagation <- function(probs, N, batchsize, conv_layer_size, pooling_layer_size, pooling_size, filter_size){
+cnnBackpropagation <- function(probs, N, batchsize, conv_layer_size, pooling_layer_size, pooling_size, filter_size, model){
+  W1 <- model$W1
+  b1 <- model$b1
+  W2 <- model$W2
+  b2 <- model$b2
   # backward ....
   dscores <- probs
   dscores[Y.index] <- dscores[Y.index] -1
@@ -7,7 +11,26 @@ cnnBackpropagation <- function(probs, N, batchsize, conv_layer_size, pooling_lay
   dW2 <- t(shaping) %*% dscores 
   db2 <- colSums(dscores)
   
-  upsample <- upsample(N, conv_layer_size, pooling_layer_size, pooling_size)
+  dpooling <- array(0,c(N,pooling_layer_size,pooling_layer_size))
+  dshaping <- dscores %*% t(W2)
+  
+  for (i in 1:N) {
+    dpooling[i,,] <- matrix(dshaping[i,],pooling_layer_size,pooling_layer_size)
+    dpooling[i,,] <- dpooling[i,,] * pooling.layer[i,,]
+  }
+  
+  upsample <- array(0,c(N,conv_layer_size,conv_layer_size))
+  for (k in 1:N) {
+    for (i in 1:pooling_layer_size) {
+      for (j in 1:pooling_layer_size) {
+        upsample[k,2*i-1,2*j-1] <- dpooling[k,i,j]
+        upsample[k,2*i-1,2*j] <- dpooling[k,i,j]
+        upsample[k,2*i,2*j-1] <- dpooling[k,i,j]
+        upsample[k,2*i,2*j] <- dpooling[k,i,j]
+      }
+    }
+  }
+  upsample <- upsample/(pooling_size*pooling_size)
   upsample[upsample <= 0] <- 0
   dconv <- upsample
   
@@ -16,12 +39,7 @@ cnnBackpropagation <- function(probs, N, batchsize, conv_layer_size, pooling_lay
     dconv_sum <- dconv[i,,] + dconv_sum
   }
   
-  dW1 <- matrix(0,filter_size,filter_size)
-  
-  for (i in 1:N) {
-    dW1 <- dW1 + convolution(rotate(rotate(X_train[i,,])), W = dconv_sum, b = 0)
-  }
-  
+  dW1 <- matrix(sum(dconv_sum),filter_size,filter_size)
   db1 <- sum(dconv_sum)
   
   # update ....

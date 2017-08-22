@@ -4,7 +4,7 @@
 rm(list=ls())
 sources <- c("convolution.R","meanpool.R","relu.R","rotate.R",
              "cnnForward.R","cnnCostFunction.R","cnnBackpropagation.R",
-             "upsample.R","cnnPredict.R")
+            "cnnPredict.R")
 for (i in 1:length(sources)) {
   cat(paste("Loading ",sources[i],"\n"))
   source(sources[i])
@@ -13,7 +13,7 @@ cat(sprintf('Loading Data ...\n'))
 load("mnist.RData")
 
 # to make the case reproducible.
-set.seed(1000)
+set.seed(1)
 # sampling to a small dataset
 samp_train <- sample(1:60000,300)
 samp_test <- sample(1:10000,50)
@@ -50,6 +50,17 @@ if(is.null(model)) {
   b1 <- rnorm(1)
   W2 <- matrix(rnorm(P*P*K),nrow=P*P,ncol=K)/sqrt(P*P*K)
   b2 <- matrix(0, nrow=1, ncol=K)
+  
+  model <- list( F = F,
+                 C = C,
+                 P = P,
+                 K = K,
+                 # weights and bias
+                 W1 = W1, 
+                 b1 = b1, 
+                 W2 = W2, 
+                 b2 = b2)
+  
 } else {
   F  <- model$F
   C  <- model$C
@@ -57,7 +68,7 @@ if(is.null(model)) {
   K  <- model$K
   W1 <- model$W1
   b1 <- model$b1
-  W1 <- model$W2
+  W2 <- model$W2
   b2 <- model$b2
 }
 
@@ -65,8 +76,8 @@ if(is.null(model)) {
 ## ------------------- Part2: Compute Cost (Feedforward) ------------------- 
 cat(sprintf('\nFeedforward Using Convolutional Neural Network ...\n'))
 reg <- 1e-1
-probs <- cnnForward(N, C, P ,K, X = X_train, W1, W2, b1, b2)
-loss <- cnnCostFunction(probs, W1, W2, N)
+probs <- cnnForward(N, X = X_train, model)
+loss <- cnnCostFunction(probs, model, N)
 cat(sprintf(('Cost at parameters (initialization): %f'), loss))
 
 ## ------------------- Part3: Implement Backpropagation ------------------- 
@@ -80,20 +91,20 @@ maxit <- 2000
 abstol <- 1e-2
 display <- 10
 lr <- 1e-1
-reg <- 1e-1
-i <- 0
-while(i < maxit && loss > abstol ) {
+reg <- 1e-3
+t <- 0
+while(t < maxit && loss > abstol ) {
   
   # iteration index
-  i <- i +1
+  t <- t +1
   
   # forward ....
-  probs <- cnnForward(N, C, P ,K, X = X_train, W1, W2, b1, b2)
+  probs <- cnnForward(N, X = X_train, model)
   # compute the loss
-  loss <- cnnCostFunction(probs, W1, W2, N)
+  loss <- cnnCostFunction(probs, model, N)
   
   # display results and update model
-  if( i %% display == 0) {
+  if( t %% display == 0) {
     if(!is.null(X_t)) {
       model <- list( F = F,
                      C = C,
@@ -106,14 +117,14 @@ while(i < maxit && loss > abstol ) {
                      b2 = b2)
       labs <- cnnPredict(model, X_t, C, P)
       accuracy <- mean(as.integer(Y_t) == Y.set[labs])
-      cat(i, loss, accuracy, "\n")
+      cat(t, loss, accuracy, "\n")
     } else {
-      cat(i, loss, "\n")
+      cat(t, loss, "\n")
     }
   }
   
   # backward ....
-  model <- cnnBackpropagation(probs, batchsize=N, N, C, P, pooling_size=2, F)
+  model <- cnnBackpropagation(probs, batchsize=N, N, C, P, pooling_size=2, F, model)
 }
 mnist.model <- model
 

@@ -1,5 +1,12 @@
-cnnForward <- function(N, C, P, K, X, W1, W2, b1, b2){
+cnnForward <- function(N, X, model){
   # layer initialization
+  C  <- model$C
+  P  <- model$P
+  K  <- model$K
+  W1 <- model$W1
+  b1 <- model$b1
+  W2 <- model$W2
+  b2 <- model$b2
   conv.layer <<- array(0,c(N,C,C))
   pooling.layer <<- array(0,c(N,P,P))
   shaping <<- matrix(0,N,P*P)

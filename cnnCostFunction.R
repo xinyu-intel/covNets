@@ -1,4 +1,6 @@
-cnnCostFunction <- function(probs, W1, W2, batchsize){
+cnnCostFunction <- function(probs, model, batchsize){
+  W1 <- model$W1
+  W2 <- model$W2
   corect.logprobs <- 0
   # compute the loss
   corect.logprobs <- -log(probs[Y.index])
