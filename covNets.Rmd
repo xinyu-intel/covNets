@@ -369,7 +369,7 @@ train.dnn <- function(X_train=X_train, X_test=NULL,
   
   # Training the network
   t <- 0
-  while(t < maxit && loss > abstol ) {
+  while(t < maxit) {
     
     # iteration index
     t <- t +1
@@ -417,55 +417,53 @@ train.dnn <- function(X_train=X_train, X_test=NULL,
       }
     }
     
-    # backward ....
-    dscores <- probs
-    dscores[Y.index] <- dscores[Y.index] -1
-    dscores <- dscores / batchsize
-    
-    dW2 <- t(shaping) %*% dscores 
-    db2 <- colSums(dscores)
-    
-    dpooling <- array(0,c(N,pooling_layer_size,pooling_layer_size))
-    dshaping <- dscores %*% t(W2)
-    
-    for (i in 1:N) {
-      dpooling[i,,] <- matrix(dshaping[i,],pooling_layer_size,pooling_layer_size)
-      dpooling[i,,] <- dpooling[i,,] * pooling.layer[i,,]
-    }
-    
-    upsample <- array(0,c(N,conv_layer_size,conv_layer_size))
-    for (k in 1:N) {
-      for (i in 1:pooling_layer_size) {
-        for (j in 1:pooling_layer_size) {
-              upsample[k,2*i-1,2*j-1] <- dpooling[k,i,j]
-              upsample[k,2*i-1,2*j] <- dpooling[k,i,j]
-              upsample[k,2*i,2*j-1] <- dpooling[k,i,j]
-              upsample[k,2*i,2*j] <- dpooling[k,i,j]
-        }
+  # backward ....
+  dscores <- probs
+  dscores[Y.index] <- dscores[Y.index] -1
+  dscores <- dscores / batchsize
+  
+  dW2 <- t(shaping) %*% dscores 
+  db2 <- colSums(dscores)
+  
+  dshaping <- dscores %*% t(W2)
+  shape_error <- matrix(0,pooling_layer_size,pooling_layer_size)
+  unshaping <- array(0,c(N,pooling_layer_size,pooling_layer_size))
+  for (i in i:N) {
+    unshaping[i,,] <- matrix(dshaping[i,],13,13)
+    shape_error <- shape_error + unshaping[i,,]
+  }
+  shape_error <- shape_error / N
+  upsample <- matrix(0,conv_layer_size,conv_layer_size)
+    for (i in 1:pooling_layer_size) {
+      for (j in 1:pooling_layer_size) {
+        upsample[2*i-1,2*j-1] <- shape_error[i,j]
+        upsample[2*i-1,2*j] <- shape_error[i,j]
+        upsample[2*i,2*j-1] <- shape_error[i,j]
+        upsample[2*i,2*j] <- shape_error[i,j]
       }
     }
-    upsample <- upsample/(pooling_size*pooling_size)
-    upsample[upsample <= 0] <- 0
-    dconv <- upsample
-    
-    dconv_sum <- matrix(0,conv_layer_size,conv_layer_size)
-    for (i in 1:N) {
-      dconv_sum <- dconv[i,,] + dconv_sum
-    }
-    
-    dW1 <- matrix(sum(dconv_sum),filter_size,filter_size)
-    db1 <- sum(dconv_sum)
-    
-    # update ....
-    dW2 <- dW2 + reg*W2
-    dW1 <- dW1 + reg*W1
-    
-    W1 <- W1 - lr * dW1
-    b1 <- b1 - lr * db1
-    
-    W2 <- W2 - lr * dW2
-    b2 <- b2 - lr * db2
-    
+  upsample <- upsample/4
+  upsample[upsample <= 0] <- 0
+  dconv <- upsample
+  
+  dW1 <- matrix(0,F,F)
+  for (i in i:N) {
+    dW1 <- dW1 + convolution(X_train[i,,], W = rotate(dconv), b = 0)
+  }
+
+  dW1 <- dW1 / N
+
+  db1 <- sum(dconv)
+  
+  # update ....
+  dW2 <- dW2 + reg*W2
+  dW1 <- dW1 + reg*W1
+  
+  W1 <- W1 - lr * dW1
+  b1 <- b1 - lr * db1
+  
+  W2 <- W2 - lr * dW2
+  b2 <- b2 - lr * db2
   }
   
   # final results
@@ -495,15 +493,18 @@ Y_train[Y_train==0]<-10
 Y_test[Y_test==0]<-10
 
 # 1. split data into test/train
-samp_train <- sample(1:60000,300)
-samp_test <- sample(1:10000,50)
+samp_train <- sample(1:60000,100)
+samp_test <- sample(1:10000,30)
 
 # 2. train model
 mnist.model <- train.dnn(X_train = X_train[samp_train,,], 
                       X_test = X_test[samp_test,,], 
                       Y_train = Y_train[samp_train],
                       Y_test = Y_test[samp_test],
-                      maxit=2000, display=50)
+                      lr = 1e-2,
+                      # regularization rate
+                      reg = 1e-3,
+                      maxit=2000, display=5)
 
 # 3. prediction
 # NOTE: if the predict is factor, we need to transfer the number into class manually.
