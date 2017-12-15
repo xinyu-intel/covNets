@@ -2,29 +2,29 @@
 
 The repo contains some r scripts aiming to build a demo covNets framework for image recognizing from scratch. 
 
-## file description
+## File Description
 
-**cnn.R:**run model on mnist dataset.
+**cnn.R** run model on mnist dataset.
 
-**convolution.R:**convolution function.
+**convolution.R** convolution function.
 
-**meanpool.R**mean pooling function.
+**meanpool.R** mean pooling function.
 
-**mnist.R:**download and read mnist dataset automatically(download into data folder and save as .RData file).
+**mnist.R** download and read mnist dataset automatically(download into data folder and save as .RData file).
 
-**model.R**cnn model, forward and backward.
+**model.R** cnn model, forward and backward.
 
-**predict.R**cnn predict function.
+**predict.R** cnn predict function.
 
-**relu.R:**relu activation function.
+**relu.R** relu activation function.
 
-**rotate.R:**rotate matrix.
+**rotate.R** rotate matrix.
 
-**python:**a cnn python script based mainly on numpy.
+**python** a cnn python script based mainly on numpy.
 
-**data:**mnist data created by mnist.R.
+**data** mnist data created by mnist.R.
 
-## problems
+## Problems
 
 - backward function can be wrong.
 
