@@ -2,7 +2,9 @@
 
 The repo contains some r scripts aiming to build a demo covNets framework for image recognizing from scratch. 
 
-## File Description
+**Attention** A brand new cnn framework can be found in the [Conv3d folder](https://github.com/xinyulab/covNets/tree/master/Conv3d)
+
+## Old File Description
 
 **cnn.R** run model on mnist dataset.
 
@@ -24,8 +26,3 @@ The repo contains some r scripts aiming to build a demo covNets framework for im
 
 **data** mnist data created by mnist.R.
 
-## Problems
-
-- backward function can be wrong.
-
-- With python I can store and append parameters and some cache in a dictionary. How to achieve this goal in R?(list function in R will cause nest problem, e.g. list1(list2(),list3(list4()..)))
