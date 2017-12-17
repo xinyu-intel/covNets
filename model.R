@@ -1,186 +1,145 @@
-# Train: build and train a 2-layers neural network 
-model.cnn <- function(X_train = NULL, X_test = NULL, 
-                      Y_train = NULL, Y_test = NULL,
-                      model = NULL,
-                      # set filter size
-                      filter_size = 3,
-                      # set filter stride
-                      filter_stride = 1,
-                      # set pooling size
-                      pooling_size = 2,
-                      # set pooling stride
-                      pooling_stride = 2,
-                      # max iteration steps
-                      maxit=2000,
-                      # delta loss 
-                      abstol=1e-2,
-                      # learning rate
-                      lr = 1e-2,
-                      # regularization rate
-                      reg = 1e-3,
-                      # show results every 'display' step
-                      display = 100,
-                      random.seed = 1)
-{
-  # to make the case reproducible.
-  set.seed(random.seed)
+rm(list=ls())
+sources <- c("mnist.R","pad3d.R","conv_single_step.R","conv_forward.R","conv_backward.R",
+             "create_mask_from_window.R","distribute_value.R","pool_forward.R","pool_backward.R",
+             "arr2col.R", "affine_forward.R","activation.R","affine_activation_forward.R",
+             "softmax.R","cross_entropy_cost.R","affine_backward.R","affine_activation_backward.R")
+
+for (i in 1:length(sources)) {
+  cat(paste("Loading ",sources[i],"\n"))
+  source(sources[i])
+}
+
+provideMNIST(folder = "./data/", download = T)
+load("./data/train.RData")
+load("./data/test.RData")
+
+dim(trainData) # 60000 784
+dim(trainLabels) # 60000 10
+dim(testData) # 10000 784
+dim(testLabels) # 10000 10
+
+# matrix to tensor
+# Train_num <- nrow(trainData)
+# Test_num <- nrow(testData)
+
+batch_size <- 300
+Train_num <- batch_size
+Test_num <- batch_size
+X_size <- sqrt(ncol(trainData))
+X_train <- array(0,c(Train_num,X_size,X_size,1))
+X_test <- array(0,c(Test_num,X_size,X_size,1))
+for (i in 1:Train_num) {
+  X_train[i,,,]<-matrix(trainData[i,],X_size,1)
+}
+for (i in 1:Test_num) {
+  X_test[i,,,]<-matrix(testData[i,],X_size,1)
+}
+
+# matrix to vector
+Y_train <- max.col(trainLabels)[1:batch_size]
+Y_test <- max.col(testLabels)[1:batch_size]
+Y.len   <- length(unique(Y_train))
+
+set.seed(1)
+
+# iteration
+iter <- 0
+maxit <- 50
+while(iter < maxit){
   
-  # total number of training set
-  N <- dim(X_train)[1]
+  iter <- iter + 1
   
-  X <- X_train
-  # correct categories represented by integer
-  Y <- Y_train
-  if(is.factor(Y)) { Y <- as.integer(Y) }
-  # create index for both row and col
-  Y.len <- length(unique(Y))
-  Y.set <- sort(unique(Y))
-  Y.index <- cbind(1:N, match(Y, Y.set))
+  # weight initialization
+  if (!exists('W')) {
+    f <- 3
+    n_C <- 3
+    W <- array(rnorm(f*f*dim(X_train)[4]*n_C), c(f, f, dim(X_train)[4], n_C))
+    b <- array(0,c(1, 1, 1, n_C))
+  }
   
-  # create model or get model from parameter
-  if(is.null(model)) {
-    # size of filter
-    F <- filter_size
-    # size of conv_layer
-    C <- dim(X)[2]-F+filter_stride
-    # size of pooling layer
-    P <- C/pooling_stride
-    # number of categories for classification
-    K <- Y.len
-    
-    # create and init weights and bias 
-    W1 <- matrix(rnorm(F*F), nrow=F)
-    b1 <- rnorm(1)
+  # conv forward
+  hparameters <- list(pad = 1, stride = 1)
+  conv_forward_output <- conv_forward(X_train, W, b, hparameters)
+  Z <- conv_forward_output$Z
+  cache_conv <- conv_forward_output$cache
+  
+  # conv relu
+  relu_output <- relu(Z)
+  Z <- relu_output$A
+  cache_relu <- relu_output$cache
+  
+  # pool forward
+  pool_forward_output <- pool_forward(Z, list(stride=4,f=4), mode = "max")
+  P <- pool_forward_output$A
+  cache_pool <- pool_forward_output$cache
+  
+  # stretch
+  stretch_output_list <- arr2col(P)
+  stretch_output <- stretch_output_list$output
+  cache_stretch <- stretch_output_list$cache
+  
+  if (!exists('W2')) {
+    # affine layer initialization
     # He Initialization
-    W2 <- matrix(rnorm(P*P*K),
-                 nrow=P*P,ncol=K)*sqrt(2/P)
-    b2 <- matrix(0, nrow=1, ncol=K)
-    
-  } else {
-    W1 <- model$W1
-    b1 <- model$b1
-    W2 <- model$W2
-    b2 <- model$b2
+    W2 <- matrix(rnorm(Y.len * dim(stretch_output)[2]),
+                 nrow=dim(stretch_output)[2], ncol=Y.len) * sqrt(2/dim(stretch_output)[2])
+    b2 <- matrix(0, nrow=1, ncol=Y.len)
   }
   
-  # init loss to a very big value
-  loss <- 100000
+  # affine forward
+  affine_activation_output <- affine_activation_forward(stretch_output, W2, b2, activation = "NULL")
+  A <- affine_activation_output$A
+  cache_affine <- affine_activation_output$cache
   
-  # init layer
-  conv.layer <- array(0,c(N,C,C))
-  pooling.layer <- array(0,c(N,P,P))
-  stretch <- matrix(0, N, P*P)
+  # softmax layer
+  softmax_output <- softmax(A)
+  S <- softmax_output$probs
+  cache_softmax <- softmax_output$cache
+  pred <- max.col(S)
   
-  # Training the network
-  t <- 0
-  while(t < maxit) {
-    
-    # iteration index
-    t <- t +1
-    
-    # forward ....
-    # 1 indicate row, 2 indicate col
-    corect.logprobs <- 0
-    
-    # conv block(conv+relu+pooling)
-    for (i in 1:N) {
-       # forward ....
-       # 1 indicate row, 2 indicate col
-       conv.layer[i,,] <- convolution(X_train[i,,], W = W1, b = b1)
-       # neurons : ReLU
-       conv.layer[i,,] <- relu(conv.layer[i,,])
-       # pooling layer
-       pooling.layer[i,,] <- meanpool(conv.layer[i,,], ksize = pooling_size, stride = pooling_stride)
-       # tensor to matrix
-       stretch[i,] <- matrix(pooling.layer[i,,], ncol = 1)
-    }
-    
-    # affine layer
-    score <- sweep(stretch %*% W2, 2, b2, '+')
-    # softmax
-    score.exp <- exp(score)
-    probs <- score.exp/rowSums(score.exp)
-    # compute the loss
-    corect.logprobs <- -log(probs[Y.index])
-    data.loss <- sum(corect.logprobs)/N
-    reg.loss <- 0.5*reg* (sum(W1*W1) + sum(W2*W2))
-    loss <- data.loss + reg.loss
-    
-    # display results and update model
-    if( t %% display == 0) {
-      if(!is.null(X_test)) {
-        model <- list(W1 = W1, 
-                       b1 = b1, 
-                       W2 = W2, 
-                       b2 = b2)
-        labs <- predict.cnn(model, X_test)
-        accuracy <- mean(as.integer(Y_test) == Y.set[labs])
-        cat(t, loss, accuracy, "\n")
-      } else {
-        cat(t, loss, "\n")
-      }
-    }
-    
-  # backward ....
-  dscores <- probs
-  dscores[Y.index] <- dscores[Y.index] -1
+  # loss function
+  loss_output <- cross_entropy_cost(AL = S, Y = Y_train, batch_size = batch_size)
+  loss <- loss_output$loss
+  cache_loss <- loss_output$cache
+  accuracy <- mean(as.integer(Y_train) == pred)
   
-  dW2 <- t(stretch) %*% dscores 
-  db2 <- colSums(dscores)
+  # compute dA
+  AL <- cache_loss$AL
+  Y.index <- cache_loss$Y.index
+  dA <- AL
+  dA[Y.index] <- dA[Y.index] - 1
+  dA <- dA/batch_size
   
-  dstretch <- dscores %*% t(W2)
-  unstretch <- array(0,c(N,P,P))
-  for (i in i:N) {
-    unstretch[i,,] <- matrix(dstretch[i,],P,P)
-  }
-
-  upsample <- array(0,c(N,C,C))
-  for (n in 1:N) {
-    for (i in 1:P) {
-      for (j in 1:P) {
-        upsample[n,2*i-1,2*j-1] <- unstretch[n,i,j]
-        upsample[n,2*i-1,2*j] <- unstretch[n,i,j]
-        upsample[n,2*i,2*j-1] <- unstretch[n,i,j]
-        upsample[n,2*i,2*j] <- unstretch[n,i,j]
-      }
-    }
-  }
-   
-  upsample <- upsample/4
-  upsample[upsample <= 0] <- 0
+  # affine backward
+  affine_activation_backward_output <- affine_activation_backward(dA, cache = cache_affine, activation = "NULL")
+  daffine <- affine_activation_backward_output$dA_prev
+  dW2 <- affine_activation_backward_output$dW
+  db2 <- affine_activation_backward_output$db
   
-  ####### blow may be wrong ######
-  dconv <- apply(upsample,2:3,sum)
+  # unstretch
+  unstrentch <- col2arr(daffine, cache = cache_stretch)
   
-  dW1 <- matrix(0,F,F)
+  # pooling backward
+  pool_backward_output <- pool_backward(unstrentch, cache = cache_pool, mode = "max")
   
-  for (i in i:N) {
-    dW1 <- dW1 + convolution(X_train[i,,], W = rotate(dconv), b = 0)
-  }
-
-  dW1 <- dW1 / N
-
-  db1 <- sum(dconv)
+  # relu backward
+  pool_backward_output <- relu_backward(pool_backward_output, cache = cache_relu)
   
-  # update ....
-  dW2 <- dW2 + reg*W2
-  dW1 <- dW1 + reg*W1
+  # conv backward
+  conv_backward_output <- conv_backward(pool_backward_output, cache = cache_conv)
+  dconv <- conv_backward_output$dA_prev
+  dW <- conv_backward_output$dW
+  db <- conv_backward_output$db
   
-  W1 <- W1 - lr * dW1
-  b1 <- b1 - lr * db1
+  # update weights
+  lr <- 1e-1
+  
+  W <- W - lr * dW
+  b <- b - lr * db
   
   W2 <- W2 - lr * dW2
   b2 <- b2 - lr * db2
-  }
   
-  # final results
-  # creat list to store learned parameters
-  # you can add more parameters for debug and visualization
-  # such as residuals, fitted.values ...
-  model <- list( W1= W1, 
-                 b1= b1, 
-                 W2= W2, 
-                 b2= b2)
+  cat(iter, loss, accuracy, "\n")
   
-  return(model)
 }
