@@ -39,18 +39,24 @@ conv_forward <- function(A_prev, W, b, hparameters){
   
   for (i in 1:m) {                        # loop over the batch of training examples
     a_prev_pad <- A_prev_pad[i,,,]        # Select ith training example's padded activation
+    if (is.matrix(a_prev_pad)==TRUE) {
+      a_prev_pad <- array(a_prev_pad, c(dim(a_prev_pad)[1],dim(a_prev_pad)[2],1))
+    }
     for (h in 1:n_H) {                    # loop over vertical axis of the output volume
       for (w in 1:n_W) {                  # loop over horizontal axis of the output volume
         for (c in 1:n_C) {                # loop over channels (= #filters) of the output volume
           
           # Find the corners of the current "slice"
-          vert_start <- h
-          vert_end <- h + f - 1
-          horiz_start <- w
-          horiz_end <- w + f - 1
+          vert_start <- (h - 1) * stride + 1
+          vert_end <- vert_start + f - 1
+          horiz_start <- (w - 1) * stride + 1
+          horiz_end <- horiz_start + f - 1
           
           # Use the corners to define the (3D) slice of a_prev_pad
           a_slice_prev <- a_prev_pad[vert_start:vert_end,horiz_start:horiz_end,]
+          if (is.matrix(a_slice_prev)==TRUE) {
+            a_slice_prev <- array(a_slice_prev, c(dim(a_slice_prev)[1],dim(a_slice_prev)[2],1))
+          }
           
           # Convolve the (3D) slice with the correct filter W and bias b, to get back one output neuron.
           Z[i, h, w, c] = conv_single_step(a_slice_prev, W[,,,c], b[,,,c])
@@ -69,11 +75,11 @@ conv_forward <- function(A_prev, W, b, hparameters){
 }
 
 
-set.seed(1)
-A_prev <-  array(rnorm(10*4*4*3), c(10,4,4,3))
-W <- array(rnorm(2*2*3*8), c(2,2,3,8))
-b <- array(rnorm(8),c(1,1,1,8))
-hparameters <- list(pad = 2, stride = 1)
-
-Z <- conv_forward(A_prev, W, b, hparameters)$Z
-cache_conv <- conv_forward(A_prev, W, b, hparameters)$cache
+# set.seed(1)
+# A_prev <-  array(rnorm(10*4*4*3), c(10,4,4,3))
+# W <- array(rnorm(2*2*3*8), c(2,2,3,8))
+# b <- array(rnorm(8),c(1,1,1,8))
+# hparameters <- list(pad = 2, stride = 1)
+# 
+# Z <- conv_forward(A_prev, W, b, hparameters)$Z
+# cache_conv <- conv_forward(A_prev, W, b, hparameters)$cache

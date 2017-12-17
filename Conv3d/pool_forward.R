@@ -34,13 +34,16 @@ pool_forward <- function(A_prev, hparameters, mode = "max"){
         for (c in 1:n_C) {                # loop over channels of the output volume
           
           # Find the corners of the current "slice"
-          vert_start <- h
-          vert_end <- h + f - 1
-          horiz_start <- w
-          horiz_end <- w + f - 1
+          vert_start <- (h - 1) * stride + 1
+          vert_end <- vert_start + f - 1
+          horiz_start <- (w - 1) * stride + 1
+          horiz_end <- horiz_start + f - 1
           
           # Use the corners to define the current slice on the ith training example of A_prev, channel c.
           a_prev_slice = A_prev[i,vert_start:vert_end,horiz_start:horiz_end,c]
+          if (is.matrix(a_prev_slice)==TRUE) {
+            a_prev_slice <- array(a_prev_slice, c(dim(a_prev_slice)[1],dim(a_prev_slice)[2],1))
+          }
           
           # Compute the pooling operation on the slice. Use an if statment to differentiate the modes.
           A[i, h, w, c] <- ifelse(mode == "max", max(a_prev_slice), mean(a_prev_slice))
@@ -56,8 +59,8 @@ pool_forward <- function(A_prev, hparameters, mode = "max"){
 }
 
 
-set.seed(1)
-A_prev <- array(rnorm(2*4*4*3),c(2,4,4,3))
-hparameters <- list(stride=1,f=4)
-A <- pool_forward(A_prev, hparameters)$A
-cache <- pool_forward(A_prev, hparameters)$cache
+# set.seed(1)
+# A_prev <- array(rnorm(2*4*4*3),c(2,4,4,3))
+# hparameters <- list(stride=1,f=4)
+# A <- pool_forward(A_prev, hparameters)$A
+# cache <- pool_forward(A_prev, hparameters)$cache

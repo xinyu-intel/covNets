@@ -22,4 +22,4 @@ distribute_value <- function(dz, shape){
   return(a)
 }
 
-a = distribute_value(2, c(2,2))
+# a = distribute_value(2, c(2,2))

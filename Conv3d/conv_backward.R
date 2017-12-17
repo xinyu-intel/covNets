@@ -61,10 +61,10 @@ conv_backward <- function(dZ, cache){
         for (c in 1:n_C) {                         # loop over the channels of the output volume
           
           # Find the corners of the current "slice"
-          vert_start <- h
-          vert_end <- h + f - 1
-          horiz_start <- w
-          horiz_end <- w + f - 1
+          vert_start <- (h - 1) * stride + 1
+          vert_end <- vert_start + f - 1
+          horiz_start <- (w - 1) * stride + 1
+          horiz_end <- horiz_start + f - 1
           
           # Use the corners to define the slice from a_prev_pad
           a_slice <- a_prev_pad[vert_start:vert_end, horiz_start:horiz_end, ]
@@ -86,7 +86,7 @@ conv_backward <- function(dZ, cache){
 }
 
 
-set.seed(1)
-dA <- conv_backward(Z, cache_conv)$dA_prev
-dW <- conv_backward(Z, cache_conv)$dW
-db <- conv_backward(Z, cache_conv)$db
+# set.seed(1)
+# dA <- conv_backward(Z, cache_conv)$dA_prev
+# dW <- conv_backward(Z, cache_conv)$dW
+# db <- conv_backward(Z, cache_conv)$db

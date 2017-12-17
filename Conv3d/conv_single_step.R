@@ -10,15 +10,17 @@ conv_single_step <- function(a_slice_prev, W, b){
   # 
   # Returns:
   # Z -- a scalar value, result of convolving the sliding window (W, b) on a slice x of the input data
-  
+  f <- dim(a_slice_prev)[1]
+  n_C_prev <- dim(a_slice_prev)[3]
+  W <- array(W,c(f, f, n_C_prev))
   s <- a_slice_prev * W + b
   Z <- sum(s)
   return(Z)
 }
 
-set.seed(1)
-a_slice_prev <- array(rnorm(4*4*3),c(4,4,3))
-W <- array(rnorm(4*4*3),c(4,4,3))
-b <- rnorm(1)
-Z <- conv_single_step(a_slice_prev, W, b)
-Z # -56.07105
+# set.seed(1)
+# a_slice_prev <- array(rnorm(4*4*3),c(4,4,3))
+# W <- array(rnorm(4*4*3),c(4,4,3))
+# b <- rnorm(1)
+# Z <- conv_single_step(a_slice_prev, W, b)
+# Z # -56.07105

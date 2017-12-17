@@ -41,10 +41,10 @@ pool_backward <- function(dA, cache, mode = "max"){
         for (c in 1:n_C) {
           
           # Find the corners of the current "slice"
-          vert_start <- h
-          vert_end <- h + f - 1
-          horiz_start <- w
-          horiz_end <- w + f - 1
+          vert_start <- (h - 1) * stride + 1
+          vert_end <- vert_start + f - 1
+          horiz_start <- (w - 1) * stride + 1
+          horiz_end <- horiz_start + f - 1
           
           # Compute the backward propagation in both modes.
           if(mode == "max"){
@@ -74,11 +74,11 @@ pool_backward <- function(dA, cache, mode = "max"){
 }
 
 
-set.seed(1)
-A_prev <- array(rnorm(5*5*3*2),c(5, 5, 3, 2))
-hparameters <- list(stride=1, f=2)
-A <- pool_forward(A_prev, hparameters)$A
-cache <- pool_forward(A_prev, hparameters)$cache
-dA <- array(rnorm(5*4*2*2), c(5, 4, 2, 2))
-dA_prev <- pool_backward(dA, cache, mode = "max")
-dA_prev <- pool_backward(dA, cache, mode = "average")
+# set.seed(1)
+# A_prev <- array(rnorm(5*5*3*2),c(5, 5, 3, 2))
+# hparameters <- list(stride=1, f=2)
+# A <- pool_forward(A_prev, hparameters)$A
+# cache <- pool_forward(A_prev, hparameters)$cache
+# dA <- array(rnorm(5*4*2*2), c(5, 4, 2, 2))
+# dA_prev <- pool_backward(dA, cache, mode = "max")
+# dA_prev <- pool_backward(dA, cache, mode = "average")
