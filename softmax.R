@@ -1,9 +1,10 @@
-softmax <- function(X){
+logsumexp <- function (x) {
+  y <- max(x)
+  y <- y + log(sum(exp(x - y)))
+}
 
-  score.exp <- exp(X)
-  probs <- score.exp/rowSums(score.exp)
-  
-  cache <- X
+softmax <- function (x) {
+  probs <- exp(x - logsumexp(x))
+  cache <- x
   list(probs = probs, cache = cache)
-  
 }
