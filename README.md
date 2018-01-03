@@ -21,3 +21,8 @@ The repo contains some r scripts aiming to build a demo covNets framework for im
 - hparameters setting.
 - predict on test set.
 
+
+**Problem**
+
+- Numerical Stability in R.
+
