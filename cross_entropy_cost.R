@@ -4,7 +4,8 @@ cross_entropy_cost <- function(AL, Y, batch_size){
   Y.set   <- sort(unique(Y))
   Y.index <- cbind(1:batch_size, match(Y, Y.set))
   
-  corect.logprobs <- -log(AL[Y.index])
+  
+  corect.logprobs <- -log(AL[Y.index] + 1e-300)
   loss  <- sum(corect.logprobs)/batch_size
   
   cache <- list(AL = AL, Y.index = Y.index)
